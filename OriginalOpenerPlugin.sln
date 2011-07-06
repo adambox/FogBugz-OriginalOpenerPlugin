@@ -1,0 +1,20 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual Studio 2008
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OriginalOpenerPlugin", "OriginalOpenerPlugin.csproj", "{0CE4499D-8BD3-4233-8301-A6715D188E9F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0CE4499D-8BD3-4233-8301-A6715D188E9F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0CE4499D-8BD3-4233-8301-A6715D188E9F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0CE4499D-8BD3-4233-8301-A6715D188E9F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0CE4499D-8BD3-4233-8301-A6715D188E9F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
