@@ -28,9 +28,13 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
         protected const string PLUGIN_TABLE_NAME = "FilterIxPersonOpenedBy";
         protected const string FILTER_HEADING = "Original Opener";
         protected const string PLUGIN_FIELD_NAME = "ixPersonOriginallyOpenedBy";
+        protected const string PLUGIN_PRIMARY_KEY_NAME = "ixFilterIxPersonOpenedBy";
+        protected const int PLUGIN_DB_SCHEMA_VERSION = 1;
+        protected string sPluginTableName;
 
         public OriginalOpenerPlugin(CPluginApi api) : base(api)
         {
+            sPluginTableName = api.Database.PluginTableName(PLUGIN_TABLE_NAME);
         }
 
         #region IPluginFilterDisplay Members
@@ -131,7 +135,7 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
             if (ixPersonOriginallyOpenedBy < 1)
                 return query;
 
-            query.AddInnerJoin("BugEvent", "BugEvent.ixBug = Bug.ixBug", "BugOpenedEvent");
+            query.AddLeftJoin("BugEvent", "BugOpenedEvent.ixBug = Bug.ixBug", "BugOpenedEvent");
             query.AddWhere("BugOpenedEvent.sVerb = 'Opened'"); // this isn't localized!
             query.AddWhere("BugOpenedEvent.ixPerson = @ixPersonOriginallyOpenedBy");
             query.SetParamInt("@ixPersonOriginallyOpenedBy", ixPersonOriginallyOpenedBy);
@@ -179,7 +183,9 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
 
         public bool FilterBugEntryCanCreate(CFilter filter)
         {
-            return true;
+            // you cannot set an opener on a new case, so don't allow quick-adding if the filter
+            // includes an original opener
+            return (GetFieldValueFromFilter(filter) < 0);
         }
 
         public string FilterBugEntryUrlParams(CFilter filter)
@@ -194,22 +200,27 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
 
         public CTable[] DatabaseSchema()
         {
-            throw new Exception("The method or operation is not implemented.");
+            CTable table = api.Database.NewTable(sPluginTableName);
+            table.sDesc = "Adds a filter field for the case's original opener.";
+            table.AddAutoIncrementPrimaryKey(PLUGIN_PRIMARY_KEY_NAME);
+            table.AddIntColumn("ixFilter", true, 1);
+            table.AddIntColumn("ixPerson", true, 1);
+            table.AddIntColumn(PLUGIN_FIELD_NAME, true, 0);
+
+            return new CTable[] { table };
         }
 
         public int DatabaseSchemaVersion()
         {
-            throw new Exception("The method or operation is not implemented.");
+            return PLUGIN_DB_SCHEMA_VERSION;
         }
 
         public void DatabaseUpgradeAfter(int ixVersionFrom, int ixVersionTo, CDatabaseUpgradeApi apiUpgrade)
         {
-            throw new Exception("The method or operation is not implemented.");
         }
 
         public void DatabaseUpgradeBefore(int ixVersionFrom, int ixVersionTo, CDatabaseUpgradeApi apiUpgrade)
         {
-            throw new Exception("The method or operation is not implemented.");
         }
 
         #endregion
@@ -223,22 +234,42 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
 
         public string[] GridColumnDisplay(CGridColumn col, CBug[] rgBug, bool fPlainText)
         {
-            throw new NotImplementedException();
+            string[] rgsValues = new string[rgBug.Length];
+
+            for (int i = 0; i < rgBug.Length; i++)
+            {
+                CBug bug = rgBug[i];
+                bug.IgnorePermissions = true; // need to make sure the user can see the orig opener. if not, show "user 123"
+                CPerson personOrigOpener = api.Person.GetPerson(Convert.ToInt32(bug.QueryField("ixPersonOriginallyOpenedBy")));
+                rgsValues[i] = personOrigOpener.sFullName;
+            }
+            return rgsValues;
         }
 
         public CBugQuery GridColumnQuery(CGridColumn col)
         {
-            throw new NotImplementedException();
+            CBugQuery bugQuery = api.Bug.NewBugQuery();
+            
+            bugQuery.AddSelect("BugOpenedEvent.ixPerson as ixPersonOriginallyOpenedBy");
+            bugQuery.AddLeftJoin("BugEvent", "BugOpenedEvent.ixBug = Bug.ixBug AND BugOpenedEvent.sVerb = 'Opened'", "BugOpenedEvent"); // this isn't localized!
+
+            return bugQuery;
         }
 
         public CBugQuery GridColumnSortQuery(CGridColumn col, bool fDescending, bool fIncludeSelect)
         {
-            throw new NotImplementedException();
+            return api.Bug.NewBugQuery();
         }
 
         public CGridColumn[] GridColumns()
         {
-            throw new NotImplementedException();
+            CGridColumn gridColumn = api.Grid.CreateGridColumn();
+            gridColumn.sName = FILTER_HEADING;
+            gridColumn.sTitle = FILTER_HEADING;
+            gridColumn.iType = 0;
+            gridColumn.sGroup = "Person";
+
+            return new CGridColumn[] { gridColumn };
         }
 
         #endregion
