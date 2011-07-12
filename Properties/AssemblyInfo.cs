@@ -12,7 +12,7 @@ using FogCreek.Plugins;
 [assembly: AssemblyFogCreekEmailAddress("customer-service@fogcreek.com")]
 [assembly: AssemblyFogCreekWebsite("http://www.fogcreek.com/FogBugz/support.html")]
 [assembly: AssemblyTitle("OriginalOpenerPlugin")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyDescription("Allows searching and filtering for the original opener of a case.")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Fog Creek Software")]
 [assembly: AssemblyProduct("OriginalOpenerPlugin")]

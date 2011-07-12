@@ -225,11 +225,6 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
 
         #endregion
 
-        protected int GetFieldValueFromFilter(CFilter filter)
-        {
-            return Convert.ToInt32(filter.GetPluginField(PLUGIN_ID, PLUGIN_FIELD_NAME));
-        }
-
         #region IPluginGridColumn Members
 
         public string[] GridColumnDisplay(CGridColumn col, CBug[] rgBug, bool fPlainText)
@@ -241,7 +236,7 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
                 CBug bug = rgBug[i];
                 bug.IgnorePermissions = true; // need to make sure the user can see the orig opener. if not, show "user 123"
                 CPerson personOrigOpener = api.Person.GetPerson(Convert.ToInt32(bug.QueryField("ixPersonOriginallyOpenedBy")));
-                rgsValues[i] = personOrigOpener.sFullName;
+                rgsValues[i] = GetPersonLink(personOrigOpener);
             }
             return rgsValues;
         }
@@ -270,6 +265,22 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
             gridColumn.sGroup = "Person";
 
             return new CGridColumn[] { gridColumn };
+        }
+
+        #endregion
+
+        #region Helper Methods
+
+        protected int GetFieldValueFromFilter(CFilter filter)
+        {
+            return Convert.ToInt32(filter.GetPluginField(PLUGIN_ID, PLUGIN_FIELD_NAME));
+        }
+
+        protected string GetPersonLink(CPerson person)
+        {
+            return string.Format("<a href=\"default.asp?pg=pgPersonInfo&ixPerson={0}\">{1}</a>",
+                                 person.ixPerson,
+                                 person.sFullName);
         }
 
         #endregion
