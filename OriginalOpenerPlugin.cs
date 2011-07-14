@@ -65,8 +65,7 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
 
                 /* use tryparse in case the URL querystring value isn't a valid integer */
                 if (Int32.TryParse(api.Request[api.AddPluginPrefix(PLUGIN_FIELD_NAME)].ToString(),
-                                   out ixPersonOriginallyOpenedBy) &&
-                    (ixPersonOriginallyOpenedBy > IXPERSON_INVALID))
+                                   out ixPersonOriginallyOpenedBy))
                 {
                     // if the requested value isn't an actual CPerson, set the plugin field to "any"
                     if (!IsValidPerson(ixPersonOriginallyOpenedBy))
@@ -109,9 +108,6 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
 
         public CSelectQuery FilterOptionsQuery(CFilter filter)
         {
-            /* Specify a query for the list of cases to be returned when the
-             * filter is imposed. */
-
             int ixPersonOriginallyOpenedBy = GetFieldValueFromFilter(filter);
 
             CSelectQuery query = api.Database.NewSelectQuery("Bug");
