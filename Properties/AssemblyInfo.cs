@@ -11,11 +11,11 @@ using FogCreek.Plugins;
 [assembly: AssemblyFogCreekMinorVersionMin(39)]
 [assembly: AssemblyFogCreekEmailAddress("customer-service@fogcreek.com")]
 [assembly: AssemblyFogCreekWebsite("http://www.fogcreek.com/FogBugz/support.html")]
-[assembly: AssemblyTitle("OriginalOpenerPlugin")]
+[assembly: AssemblyTitle("Original Opener")]
 [assembly: AssemblyDescription("Allows searching and filtering for the original opener of a case.")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("Fog Creek Software")]
-[assembly: AssemblyProduct("OriginalOpenerPlugin")]
+[assembly: AssemblyCompany("Adam Wishneusky")]
+[assembly: AssemblyProduct("Original Opener")]
 [assembly: AssemblyCopyright("Copyright © Fog Creek Software 2011")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
@@ -38,5 +38,5 @@ using FogCreek.Plugins;
 // You can specify all the values or you can default the Build and Revision Numbers 
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")] // adam - Added this cool new FogBugz plugin!
+[assembly: AssemblyVersion("1.0.1.0")]
+[assembly: AssemblyFileVersion("1.0.1.0")] // adam - Added this cool new FogBugz plugin!

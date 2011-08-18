@@ -23,23 +23,26 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
     public class OriginalOpenerPlugin : Plugin, IPluginFilterJoin,
          IPluginFilterCommit, IPluginFilterOptions, IPluginGridColumn, IPluginDatabase
     {
-        protected const string PLUGIN_ID =
-            "OriginalOpenerPlugin@fogcreek.com";
+        protected const string PLUGIN_ID = "OriginalOpenerPlugin@fogcreek.com";
         protected const string PLUGIN_TABLE_NAME = "FilterIxPersonOpenedBy";
         protected const string FILTER_HEADING = "Original Opener";
+        protected const string FILTER_STRING = "originally opened by";
         protected const string PLUGIN_FIELD_NAME = "ixPersonOriginallyOpenedBy";
         protected const string PLUGIN_PRIMARY_KEY_NAME = "ixFilterIxPersonOpenedBy";
         protected const int PLUGIN_DB_SCHEMA_VERSION = 1;
         protected const int IXPERSON_INVALID = -2;
         protected const int IXPERSON_ANY = -1;
         protected const int IXPERSON_MIN = 2;
+        protected const string FILTER_OPTION_ANY = "Anybody";
 
-        protected string sPluginTableName;
+        protected string sPluginTableNamePrefixed;
+        protected string sPluginFieldNamePrefixed;
         protected int ixPersonOriginallyOpenedByPreCommit = IXPERSON_ANY;
 
         public OriginalOpenerPlugin(CPluginApi api) : base(api)
         {
-            sPluginTableName = api.Database.PluginTableName(PLUGIN_TABLE_NAME);
+            sPluginTableNamePrefixed = api.Database.PluginTableName(PLUGIN_TABLE_NAME);
+            sPluginFieldNamePrefixed = api.AddPluginPrefix(PLUGIN_FIELD_NAME);
         }
 
         #region IPluginFilterJoin Members
@@ -59,12 +62,15 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
 
         public bool FilterCommitBefore(CFilter Filter)
         {
-            if (api.Request[api.AddPluginPrefix(PLUGIN_FIELD_NAME)] != null)
+            if (api.Request[sPluginFieldNamePrefixed] != null)
             {
+                ixPersonOriginallyOpenedByPreCommit =
+                Convert.ToInt32(Filter.GetPluginField(PLUGIN_ID, PLUGIN_FIELD_NAME));
+
                 int ixPersonOriginallyOpenedBy = IXPERSON_INVALID;
 
                 /* use tryparse in case the URL querystring value isn't a valid integer */
-                if (Int32.TryParse(api.Request[api.AddPluginPrefix(PLUGIN_FIELD_NAME)].ToString(),
+                if (Int32.TryParse(api.Request[sPluginFieldNamePrefixed].ToString(),
                                    out ixPersonOriginallyOpenedBy))
                 {
                     // if the requested value isn't an actual CPerson, set the plugin field to "any"
@@ -81,6 +87,7 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
 
         public void FilterCommitRollback(CFilter Filter)
         {
+            Filter.SetPluginField(PLUGIN_ID, PLUGIN_FIELD_NAME, ixPersonOriginallyOpenedByPreCommit);
         }
 
         #endregion
@@ -99,10 +106,11 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
 
             /* Specify a single person select drop-down */
             filterOption.SetSelectOnePerson(ixPersonOriginallyOpenedBy);
-            filterOption.sQueryParam = api.AddPluginPrefix(PLUGIN_FIELD_NAME);
+            filterOption.sQueryParam = sPluginFieldNamePrefixed;
             filterOption.fShowDialogItem = true;
             filterOption.sHeader = FILTER_HEADING;
             filterOption.sName = PLUGIN_FIELD_NAME;
+            filterOption.SetDefault(IXPERSON_ANY.ToString(), FILTER_OPTION_ANY);
             return new CFilterOption[] { filterOption };
         }
 
@@ -135,7 +143,8 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
 
             if (ixPersonOriginallyOpenedBy >= IXPERSON_MIN)
             {
-                sFilterString = string.Format("Originally Opened By {0}",
+                sFilterString = string.Format("{0} {1}",
+                                              FILTER_STRING,
                                               api.Person.GetPerson(ixPersonOriginallyOpenedBy).sFullName);
 
                 /* the second parameter to CFilterStringList.Add specifies the
@@ -156,8 +165,8 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
                 return "";
             else
                 return string.Format("{0}={1}",
-                                     api.AddPluginPrefix(PLUGIN_FIELD_NAME),
-                                     GetFieldValueFromFilter(filter));
+                                     sPluginFieldNamePrefixed,
+                                     ixPersonOriginallyOpenedBy);
         }
 
         public bool FilterBugEntryCanCreate(CFilter filter)
@@ -179,7 +188,7 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
 
         public CTable[] DatabaseSchema()
         {
-            CTable table = api.Database.NewTable(sPluginTableName);
+            CTable table = api.Database.NewTable(sPluginTableNamePrefixed);
             table.sDesc = "Adds a filter field for the case's original opener.";
             table.AddAutoIncrementPrimaryKey(PLUGIN_PRIMARY_KEY_NAME);
             table.AddIntColumn("ixFilter", true, 1);
@@ -213,9 +222,11 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
             for (int i = 0; i < rgBug.Length; i++)
             {
                 CBug bug = rgBug[i];
-                bug.IgnorePermissions = true; // need to make sure the user can see the orig opener. if not, show "user 123"
+                bug.IgnorePermissions = true;
                 CPerson personOrigOpener = api.Person.GetPerson(Convert.ToInt32(bug.QueryField("ixPersonOriginallyOpenedBy")));
-                rgsValues[i] = GetPersonLink(personOrigOpener);
+                rgsValues[i] = (api.Person.GetCurrentPerson().CanSee(personOrigOpener.ixPerson)) ?
+                               GetPersonLink(personOrigOpener) :
+                               personOrigOpener.sFullName;
             }
             return rgsValues;
         }
