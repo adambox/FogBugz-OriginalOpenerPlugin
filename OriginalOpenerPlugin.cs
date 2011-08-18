@@ -2,9 +2,10 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
-using System.Web;
 using System.Data;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Web;
 
 using FogCreek.FogBugz.Plugins;
 using FogCreek.FogBugz.Plugins.Api;
@@ -20,12 +21,15 @@ using System.Collections;
 
 namespace FogCreek.Plugins.OriginalOpenerPlugin
 {
-    public class OriginalOpenerPlugin : Plugin, IPluginFilterJoin,
-         IPluginFilterCommit, IPluginFilterOptions, IPluginGridColumn, IPluginDatabase
+    public class OriginalOpenerPlugin : Plugin, IPluginFilterJoin, IPluginFilterCommit,
+                 IPluginFilterOptions, IPluginGridColumn, IPluginDatabase, IPluginSearchAxis
     {
         protected const string PLUGIN_ID = "OriginalOpenerPlugin@fogcreek.com";
         protected const string PLUGIN_TABLE_NAME = "FilterIxPersonOpenedBy";
+        protected const string PERSON_TABLE_ALIAS = "PersonOrigOpener";
+        protected const string BUGEVENT_TABLE_ALIAS = "BugOpenedEvent";
         protected const string FILTER_HEADING = "Original Opener";
+        protected const string SEARCH_AXIS = "originallyopenedby";
         protected const string FILTER_STRING = "originally opened by";
         protected const string PLUGIN_FIELD_NAME = "ixPersonOriginallyOpenedBy";
         protected const string PLUGIN_PRIMARY_KEY_NAME = "ixFilterIxPersonOpenedBy";
@@ -33,7 +37,10 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
         protected const int IXPERSON_INVALID = -2;
         protected const int IXPERSON_ANY = -1;
         protected const int IXPERSON_MIN = 2;
+        protected const int IXPERSON_FOGBUGZ_USER = -1;
         protected const string FILTER_OPTION_ANY = "Anybody";
+        protected const string SVERB_INCOMING_EMAIL = "Incoming Email";
+        protected const string SVERB_OPENED = "Opened";
 
         protected string sPluginTableNamePrefixed;
         protected string sPluginFieldNamePrefixed;
@@ -122,9 +129,9 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
             if (ixPersonOriginallyOpenedBy < IXPERSON_MIN)
                 return query;
 
-            query.AddLeftJoin("BugEvent", "BugOpenedEvent.ixBug = Bug.ixBug", "BugOpenedEvent");
-            query.AddWhere("BugOpenedEvent.sVerb = 'Opened'"); // this isn't localized!
-            query.AddWhere("BugOpenedEvent.ixPerson = @ixPersonOriginallyOpenedBy");
+            query.AddLeftJoin("BugEvent", GetBugOpenedEventLeftJoinClause(), BUGEVENT_TABLE_ALIAS);
+            query.AddWhere(string.Format("{0}.ixPerson = @ixPersonOriginallyOpenedBy",
+                                         BUGEVENT_TABLE_ALIAS));
             query.SetParamInt("@ixPersonOriginallyOpenedBy", ixPersonOriginallyOpenedBy);
 
             return query;
@@ -215,6 +222,7 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
 
         #region IPluginGridColumn Members
 
+        // original opener comes up as blank if the case originated as an email
         public string[] GridColumnDisplay(CGridColumn col, CBug[] rgBug, bool fPlainText)
         {
             string[] rgsValues = new string[rgBug.Length];
@@ -223,10 +231,22 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
             {
                 CBug bug = rgBug[i];
                 bug.IgnorePermissions = true;
-                CPerson personOrigOpener = api.Person.GetPerson(Convert.ToInt32(bug.QueryField("ixPersonOriginallyOpenedBy")));
-                rgsValues[i] = (api.Person.GetCurrentPerson().CanSee(personOrigOpener.ixPerson)) ?
-                               GetPersonLink(personOrigOpener) :
-                               personOrigOpener.sFullName;
+
+                object oQueryField = bug.QueryField(PLUGIN_FIELD_NAME);
+                int ixPersonOriginallyOpenedBy = (oQueryField == DBNull.Value) ?
+                                                 IXPERSON_INVALID :
+                                                 Convert.ToInt32(oQueryField);
+                if (ixPersonOriginallyOpenedBy == IXPERSON_INVALID)
+                {
+                    rgsValues[i] = "";
+                }
+                else
+                {
+                    CPerson personOrigOpener = api.Person.GetPerson(ixPersonOriginallyOpenedBy);
+                    rgsValues[i] = (api.Person.GetCurrentPerson().CanSee(personOrigOpener.ixPerson)) ?
+                                   GetPersonLink(personOrigOpener) :
+                                   personOrigOpener.sFullName;
+                }
             }
             return rgsValues;
         }
@@ -234,16 +254,39 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
         public CBugQuery GridColumnQuery(CGridColumn col)
         {
             CBugQuery bugQuery = api.Bug.NewBugQuery();
-            
-            bugQuery.AddSelect("BugOpenedEvent.ixPerson as ixPersonOriginallyOpenedBy");
-            bugQuery.AddLeftJoin("BugEvent", "BugOpenedEvent.ixBug = Bug.ixBug AND BugOpenedEvent.sVerb = 'Opened'", "BugOpenedEvent"); // this isn't localized!
 
+            bugQuery.AddSelect(string.Format("{0}.ixPerson as {1}, {2}.sFullName",
+                                             BUGEVENT_TABLE_ALIAS,
+                                             PLUGIN_FIELD_NAME,
+                                             PERSON_TABLE_ALIAS));
+            
+            bugQuery.AddLeftJoin("BugEvent",
+                                 GetBugOpenedEventLeftJoinClause(),
+                                 BUGEVENT_TABLE_ALIAS);
+            bugQuery.AddLeftJoin("Person",
+                                 string.Format("{0}.ixPerson = {1}.ixPerson",
+                                               PERSON_TABLE_ALIAS,
+                                               BUGEVENT_TABLE_ALIAS),
+                                 PERSON_TABLE_ALIAS);
             return bugQuery;
         }
 
         public CBugQuery GridColumnSortQuery(CGridColumn col, bool fDescending, bool fIncludeSelect)
         {
-            return api.Bug.NewBugQuery();
+            CBugQuery bq = api.Bug.NewBugQuery();
+
+            if (fIncludeSelect)
+                bq.AddSelect(string.Format("{0}.sFullName",
+                                           PERSON_TABLE_ALIAS));
+
+            if (col.iType == 0)
+            {
+                bq.AddOrderBy(string.Format("{0}.sFullName {1}",
+                                            PERSON_TABLE_ALIAS,
+                                            fDescending ? "DESC" : "ASC"));
+            }
+
+            return bq;
         }
 
         public CGridColumn[] GridColumns()
@@ -255,6 +298,61 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
             gridColumn.sGroup = "Person";
 
             return new CGridColumn[] { gridColumn };
+        }
+
+        #endregion
+
+        #region IPluginSearchAxis Members
+
+        public bool SearchAxisIsFullText(string sAxis, SearchType nType, string sValue)
+        {
+            return false;
+        }
+
+        public CSelectQuery SearchAxisQuery(string sAxis, SearchType nType, string sValue)
+        {
+            if (nType == SearchType.Bug && sAxis.ToLower() == SEARCH_AXIS)
+            {
+                CSelectQuery query = api.Database.NewSelectQuery("Bug");
+                query.AddSelect("Bug.ixBug");
+                query.AddLeftJoin("BugEvent", GetBugOpenedEventLeftJoinClause(), BUGEVENT_TABLE_ALIAS);
+
+                int ixOriginalOpenerSearched = IXPERSON_INVALID;
+                string sOriginalOpenerSearched = sValue;
+
+                if (sOriginalOpenerSearched == "*")
+                    return query;
+
+                // are they looking for a specific user by ix with "User X" or "X"?
+                Regex regex = new Regex("^(user )?(\\-?[0-9]+)$", RegexOptions.IgnoreCase);
+                if (regex.IsMatch(sOriginalOpenerSearched))
+                {
+                    ixOriginalOpenerSearched =
+                        Int32.Parse(regex.Match(sOriginalOpenerSearched).Groups[2].Value);
+                    if (ixOriginalOpenerSearched < IXPERSON_MIN)
+                        api.Notifications.AddError(string.Format("Invalid ixPerson for axis {0} value: '{1}'",
+                                                                 FILTER_HEADING,
+                                                                 ixOriginalOpenerSearched));
+                    query.AddWhere(string.Format("{0}.ixPerson = @ixPersonOriginallyOpenedBy",
+                                                 BUGEVENT_TABLE_ALIAS));
+                    query.SetParamInt("@ixPersonOriginallyOpenedBy", ixOriginalOpenerSearched);
+                }
+                else
+                {
+                    //CPersonQuery pq = api.Person.NewPersonQuery();
+                    CSelectQuery pq = api.Database.NewSelectQuery("Person");
+                    pq.AddSelect("ixPerson");
+                    pq.AddSubstringLike("Person.sFullName", sOriginalOpenerSearched);
+                    pq.IgnorePermissions = true;
+
+                    query.AddWhereIn(string.Format("{0}.ixPerson", BUGEVENT_TABLE_ALIAS), pq);
+                }
+                return query;
+            }
+            else
+            {
+                return null;
+            }
         }
 
         #endregion
@@ -289,6 +387,25 @@ namespace FogCreek.Plugins.OriginalOpenerPlugin
         protected bool IsValidPerson(int ixPerson)
         {
             return (api.Person.GetPerson(ixPerson) != null);
+        }
+
+        protected string GetBugOpenedEventLeftJoinClause()
+        {
+            // Cases opened by email have their first BugEvent's sVerb = 'Incoming Email', edited by
+            // the primary contact (same as the ixPersonOpenedBy. Other events with that sVerb
+            // are edited by ixPerson -1 (the "FogBugz" user)
+            // this clause gets the first bugevent for emails, normal, community and anon user cases
+            // note this matches FogBugz's current behavior for community user cases searchable
+            // only as openedby:primary_contact_name
+            return string.Format("{0}.ixBug = Bug.ixBug " +
+                                 "AND (" +
+                                       "({0}.sVerb = '{1}') OR " +
+                                       "({0}.sVerb = '{2}' AND {0}.ixPerson <> {3})" +
+                                     ")",
+                                 BUGEVENT_TABLE_ALIAS,
+                                 SVERB_OPENED,
+                                 SVERB_INCOMING_EMAIL,
+                                 IXPERSON_FOGBUGZ_USER);
         }
 
         #endregion
